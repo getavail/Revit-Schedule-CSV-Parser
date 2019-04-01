@@ -1,4 +1,4 @@
-﻿/*
+/*
  * User: Donovan Justice
  * Date: 6/1/2018
  * Time: 5:51 PM
@@ -115,64 +115,80 @@ namespace Utilities
 				
 		public void RunScheduleParser(List<string> filePaths)
 		{
-			ProgressBarHandler.Instance.NextCommand(filePaths.Count, "Parsing");
-				
-			foreach (string filePath in filePaths)
-			{
-				this.Application.Application.FailuresProcessing += Application_FailuresProcessing;
-				
-				if (ProgressBarHandler.Instance.IsCanceled)
-				{
-					this.Application.Application.FailuresProcessing -= Application_FailuresProcessing;
-					break;
-				}
-				
-				Document document = null;
-				
-				string fileName = Path.GetFileName(filePath);
-				string fileHash = "UNKNOWN";
-				
-				var openDocument = OpenDocument(filePath);
+            ProgressBarHandler.Instance.NextCommand(filePaths.Count, "Parsing");
 
-				if (openDocument != null)
-					document = openDocument;
-				else
-				{
-					document = this.Application.Application.OpenDocumentFile(filePath);
-					fileHash = filePath.ComputeHash();
-				}
-				
-				var schedules = new FilteredElementCollector(document)
-					.OfClass(typeof(ViewSchedule)).OfType<ViewSchedule>()
-					.Where(x => !x.IsTitleblockRevisionSchedule && !x.IsTemplate && x.Definition.ShowHeaders)
-					.OrderBy(x => x.Name)
-					.ToList();
-				
-				ProgressBarHandler.Instance.ProgressMainProcess(schedules.Count, string.Format("{0} Schedules from {1}", schedules.Count, fileName));
-				
-				foreach (ViewSchedule schedule in schedules)
-				{
-					if (ProgressBarHandler.Instance.IsCanceled)
-						break;
-					
-					try
-					{
-						ParseSchedule(schedule, filePath, fileHash);
-						ProgressBarHandler.Instance.ProgressSubProcess(string.Format("Processing: {0}", schedule.Name));
-					}
-					catch (Exception exception)
-					{
-						TaskDialog.Show(string.Format("An exception occurred for schedule {0} - ERROR", schedule.Name), exception.ToString());
-					}
-				}
-				
-				if (openDocument == null)
-					document.Close(false);
-				
-				this.Application.Application.FailuresProcessing -= Application_FailuresProcessing;
-			}
-			
-			ProgressBarHandler.Instance.IsComplete = true;
+            foreach (string filePath in filePaths)
+            {
+                this.Application.Application.FailuresProcessing += Application_FailuresProcessing;
+
+                if (ProgressBarHandler.Instance.IsCanceled)
+                {
+                    this.Application.Application.FailuresProcessing -= Application_FailuresProcessing;
+                    break;
+                }
+
+                bool canOpenDocument = false;
+
+                Document document = null;
+
+                string fileName = Path.GetFileName(filePath);
+                string fileHash = "UNKNOWN";
+
+                var openDocument = OpenDocument(filePath);
+
+                if (openDocument != null)
+                {
+                    document = openDocument;
+                    canOpenDocument = true;
+                }
+                else
+                {
+                    try
+                    {
+                        document = this.Application.Application.OpenDocumentFile(filePath);
+                        fileHash = filePath.ComputeHash();
+                        canOpenDocument = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        TaskDialog.Show("Error", string.Format("Unable to open document {0} - ERROR - {1}", fileName, ex.ToString()));
+                    }
+                }
+
+                if (canOpenDocument)
+                {
+                    var schedules = new FilteredElementCollector(document)
+                        .OfClass(typeof(ViewSchedule)).OfType<ViewSchedule>()
+                        .Where(x => !x.IsTitleblockRevisionSchedule && !x.IsTemplate && x.Definition.ShowHeaders)
+                        .OrderBy(x => x.Name)
+                        .ToList();
+
+                    ProgressBarHandler.Instance.ProgressMainProcess(schedules.Count, string.Format("{0} Schedules from {1}", schedules.Count, fileName));
+
+                    foreach (ViewSchedule schedule in schedules)
+                    {
+                        if (ProgressBarHandler.Instance.IsCanceled)
+                            break;
+
+                        try
+                        {
+                            ParseSchedule(schedule, filePath, fileHash);
+                            ProgressBarHandler.Instance.ProgressSubProcess(string.Format("Processing: {0}", schedule.Name));
+                        }
+                        catch (Exception exception)
+                        {
+                            TaskDialog.Show(string.Format("An exception occurred for schedule {0} - ERROR", schedule.Name), exception.ToString());
+                        }
+                    }
+
+                    if (openDocument == null)
+                        document.Close(false);
+                }
+
+                this.Application.Application.FailuresProcessing -= Application_FailuresProcessing;
+            }
+
+            ProgressBarHandler.Instance.IsComplete = true;
 		}
 			
 		public void ParseSchedule(ViewSchedule schedule, string filePath, string fileHash)
